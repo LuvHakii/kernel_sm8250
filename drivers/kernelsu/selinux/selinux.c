@@ -16,6 +16,13 @@ static u32 cached_init_sid __read_mostly = 0;
 static u32 cached_adbd_sid __read_mostly = 0;
 u32 ksu_file_sid __read_mostly = 0;
 
+#ifdef CONFIG_KSU_SUSFS
+/* Read by security/selinux/avc.c for AVC log spoofing. */
+u32 susfs_ksu_sid __read_mostly = 0;
+u32 susfs_priv_app_sid __read_mostly = 0;
+#define PRIV_APP_CONTEXT "u:r:priv_app:s0:c512,c768"
+#endif
+
 static int transive_to_domain(const char *domain, struct cred *cred, bool clear_exec_sid)
 {
 	u32 sid;
@@ -165,6 +172,12 @@ void cache_sid(void)
 	} else {
 		pr_info("Cached ksu_file SID: %u\n", ksu_file_sid);
 	}
+#ifdef CONFIG_KSU_SUSFS
+	susfs_ksu_sid = cached_su_sid;
+	err = security_secctx_to_secid(PRIV_APP_CONTEXT, strlen(PRIV_APP_CONTEXT), &susfs_priv_app_sid);
+	if (err)
+		susfs_priv_app_sid = 0;
+#endif
 }
 
 /*
@@ -210,6 +223,14 @@ bool is_ksu_domain(void)
 {
 	return is_task_ksu_domain(current_cred());
 }
+
+#ifdef CONFIG_KSU_SUSFS
+/* fs/ hooks call this; same check as is_ksu_domain(), exported by name. */
+bool susfs_is_current_ksu_domain(void)
+{
+	return is_ksu_domain();
+}
+#endif
 
 bool is_zygote(const struct cred *cred)
 {

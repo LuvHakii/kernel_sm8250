@@ -359,6 +359,10 @@ static void throne_tracker_fn(bool prune_only)
 prune:
 	// then prune the allowlist
 	ksu_prune_allowlist(is_uid_exist, &uid_list);
+#ifdef CONFIG_KSU_SUSFS
+	// package list is fresh: rebuild the getpriority uid filter bitmap
+	susfs_parse_priority_app_strings();
+#endif
 out:
 	// free uid_list
 	list_for_each_entry_safe (np, n, &uid_list, list) {

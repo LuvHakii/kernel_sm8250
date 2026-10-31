@@ -1,5 +1,9 @@
 static bool ksu_kernel_umount_enabled __read_mostly = true;
 
+#ifdef CONFIG_KSU_SUSFS
+extern struct work_struct susfs_extra_works;
+#endif
+
 static int kernel_umount_feature_get(u64 *value)
 {
 	*value = ksu_kernel_umount_enabled ? 1 : 0;
@@ -78,13 +82,6 @@ static inline int ksu_handle_umount(struct cred *new, const struct cred *old)
 	uid_t new_uid = ksu_get_uid_t(new->uid);
 	uid_t old_uid = ksu_get_uid_t(old->uid);
 
-	if (!ksu_kernel_umount_enabled)
-		return 0;
-
-	// if there isn't any module mounted, just ignore it!
-	if (!ksu_module_mounted)
-		return 0;
-
 	// There are 6 scenarios:
 	// 1. Normal app: zygote -> appuid
 	// 2. Isolated process forked from zygote: zygote -> isolated_process
@@ -107,6 +104,23 @@ static inline int ksu_handle_umount(struct cred *new, const struct cred *old)
 		pr_info("handle umount ignore non zygote child: %d\n", current->pid);
 		return 0;
 	}
+
+#ifdef CONFIG_KSU_SUSFS
+	// Zygote-spawned app that should not see sus mounts: flag it so every
+	// susfs view filter applies, whether or not anything gets umounted below,
+	// and run the deferred sus_path re-flagging for the new process.
+	susfs_set_current_proc_umounted();
+	if (!work_pending(&susfs_extra_works))
+		schedule_work(&susfs_extra_works);
+#endif
+
+	if (!ksu_kernel_umount_enabled)
+		return 0;
+
+	// if there isn't any module mounted, just ignore it!
+	if (!ksu_module_mounted)
+		return 0;
+
 	// umount the target mnt
 	pr_info("handle umount for uid: %d, pid: %d\n", new_uid, current->pid);
 

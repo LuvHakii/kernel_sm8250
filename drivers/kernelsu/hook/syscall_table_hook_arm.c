@@ -32,6 +32,7 @@
 // on 4.19+ its is no longer just a void *sys_call_table[]
 // it becomes syscall_fn_t sys_call_table[];
 
+#ifndef CONFIG_KSU_SUSFS // handled inline in kernel/reboot.c
 static syscall_fn_t armeabi_reboot __read_mostly = nullptr;
 asmlinkage long hook_armeabi_reboot(const struct pt_regs *regs)
 {
@@ -43,6 +44,7 @@ asmlinkage long hook_armeabi_reboot(const struct pt_regs *regs)
 	ksu_handle_sys_reboot(magic1, magic2, cmd, arg);
 	return sys_reboot(regs);
 }
+#endif // #ifndef CONFIG_KSU_SUSFS
 
 static syscall_fn_t armeabi_execve __read_mostly = nullptr;
 asmlinkage long hook_armeabi_execve(const struct pt_regs *regs)
@@ -255,7 +257,9 @@ static void syscall_table_sucompat_disable()
 
 static void syscall_table_ksud_hook_init()
 {
+#ifndef CONFIG_KSU_SUSFS
 	read_and_replace_syscall((void *)&armeabi_reboot, __ARMEABI_reboot, (void *)hook_armeabi_reboot, (void *)sys_call_table);
+#endif
 	read_and_replace_syscall((void *)&armeabi_fstat64, __ARMEABI_fstat64, (void *)hook_armeabi_fstat64_ret, (void *)sys_call_table);
 	read_and_replace_syscall((void *)&armeabi_read, __ARMEABI_read, (void *)hook_armeabi_read, (void *)sys_call_table);
 

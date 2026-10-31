@@ -95,6 +95,9 @@
 #include "downstream/slow_avc_audit_defs.h"
 #include "downstream/tiny_sulog.h"
 #include "downstream/toolkit.h"
+#ifdef CONFIG_KSU_SUSFS
+#include <linux/susfs.h>
+#endif
 #include "downstream/vmap_patch.h"
 
 #ifdef CONFIG_KSU_HOSTSREDIRECT
@@ -259,6 +262,10 @@ static int __init kernelsu_init(void)
 		pr_err("prepare cred failed!\n");
 		return -ENOSYS;
 	}
+
+#ifdef CONFIG_KSU_SUSFS
+	susfs_init();
+#endif
 
 #ifdef KSU_CAN_USE_MODULE_BLACKLIST
 	ksu_module_blacklist_init(); // Block modules early, before vendor modules are loaded in second stage.

@@ -41,8 +41,9 @@
 // on 4.19+ its is no longer just a void *sys_call_table[]
 // it becomes syscall_fn_t sys_call_table[];
 
+#ifndef CONFIG_KSU_SUSFS // handled inline in kernel/reboot.c
 extern long __arm64_sys_reboot(const struct pt_regs *regs);
-static syscall_fn_t aarch64_reboot __read_mostly = nullptr; 
+static syscall_fn_t aarch64_reboot __read_mostly = nullptr;
 asmlinkage long hook_aarch64_reboot(const struct pt_regs *regs)
 {
 	int magic1 = (int)regs->regs[0];
@@ -53,6 +54,7 @@ asmlinkage long hook_aarch64_reboot(const struct pt_regs *regs)
 	ksu_handle_sys_reboot(magic1, magic2, cmd, arg);
 	return __arm64_sys_reboot(regs);
 }
+#endif // #ifndef CONFIG_KSU_SUSFS
 
 extern long __arm64_sys_execve(const struct pt_regs *regs);
 static syscall_fn_t aarch64_execve __read_mostly = nullptr;
@@ -125,6 +127,7 @@ asmlinkage long hook_aarch64_read(const struct pt_regs *regs)
 }
 
 #ifdef CONFIG_COMPAT
+#ifndef CONFIG_KSU_SUSFS // handled inline in kernel/reboot.c
 extern long __arm64_sys_reboot(const struct pt_regs *regs);
 static syscall_fn_t armeabi_reboot __read_mostly = nullptr;
 asmlinkage long hook_armeabi_reboot(const struct pt_regs *regs)
@@ -137,6 +140,7 @@ asmlinkage long hook_armeabi_reboot(const struct pt_regs *regs)
 	ksu_handle_sys_reboot(magic1, magic2, cmd, arg);
 	return __arm64_sys_reboot(regs);
 }
+#endif // #ifndef CONFIG_KSU_SUSFS
 
 extern long __arm64_compat_sys_execve(const struct pt_regs *regs);
 static syscall_fn_t armeabi_execve __read_mostly = nullptr;
@@ -396,12 +400,16 @@ static void syscall_table_sucompat_disable()
 
 static void syscall_table_ksud_hook_init()
 {
+#ifndef CONFIG_KSU_SUSFS
 	read_and_replace_syscall((void *)&aarch64_reboot, __AARCH64_reboot, (void *)hook_aarch64_reboot, (void *)sys_call_table);
+#endif
 	read_and_replace_syscall((void *)&aarch64_newfstat, __AARCH64_newfstat, (void *)hook_aarch64_newfstat_ret, (void *)sys_call_table);
 	read_and_replace_syscall((void *)&aarch64_read, __AARCH64_read, (void *)hook_aarch64_read, (void *)sys_call_table);
 
 #if defined(CONFIG_COMPAT)
+#ifndef CONFIG_KSU_SUSFS
 	read_and_replace_syscall((void *)&armeabi_reboot, __ARMEABI_reboot, (void *)hook_armeabi_reboot, (void *)compat_sys_call_table);
+#endif
 	read_and_replace_syscall((void *)&armeabi_fstat64, __ARMEABI_fstat64, (void *)hook_armeabi_fstat64_ret, (void *)compat_sys_call_table);
 	read_and_replace_syscall((void *)&armeabi_read, __ARMEABI_read, (void *)hook_armeabi_read, (void *)compat_sys_call_table);
 #endif // COMPAT

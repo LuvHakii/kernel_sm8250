@@ -76,7 +76,8 @@ static struct kretprobe sys_fstat64_rp = {
 };
 #endif
 
-// sys_reboot
+#ifndef CONFIG_KSU_SUSFS
+// sys_reboot -- handled inline in kernel/reboot.c when susfs is enabled
 static int sys_reboot_handler_pre(struct kprobe *p, struct pt_regs *regs)
 {
 	struct pt_regs *real_regs = PT_REAL_REGS(regs);
@@ -111,6 +112,7 @@ static struct kprobe sys_reboot_kp = {
 	.symbol_name = REBOOT_SYMBOL,
 	.pre_handler = sys_reboot_handler_pre,
 };
+#endif // #ifndef CONFIG_KSU_SUSFS
 
 static int unregister_kprobe_function(void *data)
 {
@@ -138,8 +140,10 @@ loop_start:
 
 static __init int kp_ksud_init()
 {
+#ifndef CONFIG_KSU_SUSFS
 	int ret = register_kprobe(&sys_reboot_kp); // dont unreg this one
 	pr_info("kp_ksud: sys_reboot_kp: %d\n", ret);
+#endif
 
 	int ret2 = register_kretprobe(&sys_newfstat_rp);
 	pr_info("kp_ksud: sys_newfstat_rp: %d\n", ret2);
