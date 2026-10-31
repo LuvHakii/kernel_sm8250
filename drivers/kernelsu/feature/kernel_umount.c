@@ -73,6 +73,49 @@ static inline void try_umount(const char *mnt, int flags)
 	ksu_umount_mnt(mnt, &path, flags);
 }
 
+#ifdef CONFIG_KSU_SUSFS_TRY_UMOUNT
+// fs/susfs.c's provider for its own try_umount list. Called from the same
+// setuid-transition context as ksu_handle_umount() below, i.e. already
+// running inside the target uid's own mount namespace -- no namespace
+// switch needed. `uid` is for logging only, matching susfs's own callers.
+void ksu_try_umount(const char *mnt, bool check_mnt, int flags, uid_t uid)
+{
+	struct path path;
+	int err = kern_path(mnt, 0, &path);
+	if (err)
+		return;
+
+	if (check_mnt && path.dentry != path.mnt->mnt_root) {
+		path_put(&path);
+		return;
+	}
+
+	pr_info("susfs try_umount: %s for uid: %d\n", mnt, uid);
+	ksu_umount_mnt(mnt, &path, flags);
+}
+
+// Matches the real susfs4ksu KernelSU patch's susfs_try_umount_all(): the
+// user-added LH_TRY_UMOUNT_PATH list (susfs_try_umount) plus the standard
+// systemless-mount paths it always sweeps, for both legacy and magic-mount
+// KSU layouts. CMD_SUSFS_RUN_UMOUNT_FOR_CURRENT_MNT_NS calls this, not bare
+// susfs_try_umount(), to match upstream behavior.
+extern void susfs_try_umount(uid_t target_uid);
+void susfs_try_umount_all(uid_t uid)
+{
+	susfs_try_umount(uid);
+	ksu_try_umount("/system", true, 0, uid);
+	ksu_try_umount("/system_ext", true, 0, uid);
+	ksu_try_umount("/vendor", true, 0, uid);
+	ksu_try_umount("/product", true, 0, uid);
+	ksu_try_umount("/odm", true, 0, uid);
+	// '/data/adb/modules' is a loop device; we can't tell whether its
+	// dev_name is KSU, and it's safe to umount regardless.
+	ksu_try_umount("/data/adb/modules", false, MNT_DETACH, uid);
+	// For both Legacy KSU and Magic Mount KSU.
+	ksu_try_umount("/debug_ramdisk", true, MNT_DETACH, uid);
+}
+#endif
+
 static inline int ksu_handle_umount(struct cred *new, const struct cred *old)
 {
 	uid_t new_uid = ksu_get_uid_t(new->uid);
@@ -122,6 +165,10 @@ static inline int ksu_handle_umount(struct cred *new, const struct cred *old)
 		try_umount(entry->umountable, entry->flags);
 	}
 	up_read(&mount_list_lock);
+
+#ifdef CONFIG_KSU_SUSFS_TRY_UMOUNT
+	susfs_try_umount_all(new_uid);
+#endif
 
 	revert_creds(saved);
 

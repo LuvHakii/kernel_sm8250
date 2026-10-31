@@ -110,6 +110,17 @@ int ksu_handle_sys_reboot(int magic1, int magic2, unsigned int cmd, void __user 
 	return 0;
 }
 
+// susfs4ksu's real wire protocol rides prctl, not reboot. option is prctl's
+// arg0 (checked against KERNEL_SU_OPTION == KSU_INSTALL_MAGIC1), cmd/arg3/
+// arg4/arg5 are prctl's remaining args verbatim. Only susfs commands are
+// handled here -- this fork's own root-grant etc already go through the
+// reboot-based supercall above, unrelated to this channel.
+int ksu_handle_sys_prctl(unsigned long option, unsigned long cmd, unsigned long arg3,
+			  unsigned long arg4, unsigned long arg5)
+{
+	return susfs_handle_sys_prctl(option, cmd, arg3, arg4, arg5);
+}
+
 void __init ksu_supercalls_init(void)
 {
 	ksu_supercall_dump_commands();

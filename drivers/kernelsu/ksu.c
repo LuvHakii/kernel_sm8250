@@ -95,6 +95,7 @@
 #include "downstream/slow_avc_audit_defs.h"
 #include "downstream/tiny_sulog.h"
 #include "downstream/toolkit.h"
+#include "downstream/susfs_toolkit.h"
 #include "downstream/vmap_patch.h"
 
 #ifdef CONFIG_KSU_HOSTSREDIRECT

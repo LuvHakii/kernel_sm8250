@@ -112,6 +112,33 @@ static struct kprobe sys_reboot_kp = {
 	.pre_handler = sys_reboot_handler_pre,
 };
 
+#ifdef CONFIG_KSU_SUSFS
+// sys_prctl: susfs4ksu's real wire protocol. Read-only snooping -- prctl is
+// called far too often, for far too many unrelated purposes, to mutate any
+// register here the way sys_reboot_handler_pre does for its own magic.
+static int sys_prctl_handler_pre(struct kprobe *p, struct pt_regs *regs)
+{
+	struct pt_regs *real_regs = PT_REAL_REGS(regs);
+	unsigned long option = (unsigned long)PT_REGS_SYSCALL_PARM1(real_regs);
+	unsigned long cmd = (unsigned long)PT_REGS_PARM2(real_regs);
+	unsigned long arg3 = (unsigned long)PT_REGS_PARM3(real_regs);
+	unsigned long arg4 = (unsigned long)PT_REGS_SYSCALL_PARM4(real_regs);
+	unsigned long arg5 = (unsigned long)PT_REGS_PARM5(real_regs);
+
+	if (option != KSU_INSTALL_MAGIC1)
+		return 0;
+
+	ksu_handle_sys_prctl(option, cmd, arg3, arg4, arg5);
+
+	return 0;
+}
+
+static struct kprobe sys_prctl_kp = {
+	.symbol_name = PRCTL_SYMBOL,
+	.pre_handler = sys_prctl_handler_pre,
+};
+#endif
+
 static int unregister_kprobe_function(void *data)
 {
 	set_user_nice(current, 19); // low prio
@@ -140,6 +167,11 @@ static __init int kp_ksud_init()
 {
 	int ret = register_kprobe(&sys_reboot_kp); // dont unreg this one
 	pr_info("kp_ksud: sys_reboot_kp: %d\n", ret);
+
+#ifdef CONFIG_KSU_SUSFS
+	int ret_susfs_prctl = register_kprobe(&sys_prctl_kp); // dont unreg this one either
+	pr_info("kp_ksud: sys_prctl_kp: %d\n", ret_susfs_prctl);
+#endif
 
 	int ret2 = register_kretprobe(&sys_newfstat_rp);
 	pr_info("kp_ksud: sys_newfstat_rp: %d\n", ret2);

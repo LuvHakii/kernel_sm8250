@@ -20,6 +20,7 @@
 #define __PT_ORIG_SYSCALL_REG regs[8]
 
 #define REBOOT_SYMBOL "__arm64_sys_reboot"
+#define PRCTL_SYMBOL "__arm64_sys_prctl"
 #define SYS_READ_SYMBOL "__arm64_sys_read"
 #define SYS_EXECVE_SYMBOL "__arm64_sys_execve"
 // https://cs.android.com/android/kernel/superproject/+/common-android-mainline:common/scripts/syscalltbl.sh;l=57;drc=9142be9e6443fd641ca37f820efe00d9cd890eb1
@@ -53,6 +54,7 @@
 #define __PT_IP_REG uregs[12]
 
 #define REBOOT_SYMBOL "sys_reboot"
+#define PRCTL_SYMBOL "sys_prctl"
 #define SYS_READ_SYMBOL "sys_read"
 #define SYS_EXECVE_SYMBOL "sys_execve"
 #define SYS_NEWFSTAT_SYMBOL "sys_newfstat"
@@ -75,6 +77,7 @@
 #define __PT_IP_REG ip
 #define __PT_ORIG_SYSCALL_REG orig_ax
 #define REBOOT_SYMBOL "__x64_sys_reboot"
+#define PRCTL_SYMBOL "__x64_sys_prctl"
 #define SYS_READ_SYMBOL "__x64_sys_read"
 #define SYS_EXECVE_SYMBOL "__x64_sys_execve"
 #define SYS_FSTAT_SYMBOL "__x64_sys_newfstat"
@@ -99,6 +102,7 @@
 #define __PT_ORIG_SYSCALL_REG a7
 
 #define REBOOT_SYMBOL "__riscv_sys_reboot"
+#define PRCTL_SYMBOL "__riscv_sys_prctl"
 #define SYS_READ_SYMBOL "__riscv_sys_read"
 #define SYS_EXECVE_SYMBOL "__riscv_sys_execve"
 #define SYS_FSTAT_SYMBOL "__riscv_sys_newfstat"
@@ -110,6 +114,8 @@
 #if LINUX_VERSION_CODE < KERNEL_VERSION(4, 16, 0)
 #undef REBOOT_SYMBOL
 #define REBOOT_SYMBOL "sys_reboot"
+#undef PRCTL_SYMBOL
+#define PRCTL_SYMBOL "sys_prctl"
 #undef SYS_READ_SYMBOL
 #define SYS_READ_SYMBOL "sys_read"
 #undef SYS_EXECVE_SYMBOL

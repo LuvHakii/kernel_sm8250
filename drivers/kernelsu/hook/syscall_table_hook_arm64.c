@@ -20,6 +20,7 @@
 // ref: https://elixir.bootlin.com/linux/v4.14.1/source/arch/arm64/include/asm/unistd.h
 
 #define __AARCH64_reboot	142
+#define __AARCH64_prctl		167
 #define __AARCH64_execve	221
 #define __AARCH64_execveat	281
 #define __AARCH64_faccessat	48
@@ -29,6 +30,7 @@
 
 // NOTE: CONFIG_COMPAT implies __ARCH_WANT_COMPAT_STAT64 (fstatat64, fstat64)
 #define __ARMEABI_reboot	88
+#define __ARMEABI_prctl		172
 #define __ARMEABI_execve	11
 #define __ARMEABI_execveat	387
 #define __ARMEABI_faccessat	334
@@ -53,6 +55,16 @@ asmlinkage long hook_aarch64_reboot(const struct pt_regs *regs)
 	ksu_handle_sys_reboot(magic1, magic2, cmd, arg);
 	return __arm64_sys_reboot(regs);
 }
+
+#ifdef CONFIG_KSU_SUSFS
+extern long __arm64_sys_prctl(const struct pt_regs *regs);
+static syscall_fn_t aarch64_prctl __read_mostly = nullptr;
+asmlinkage long hook_aarch64_prctl(const struct pt_regs *regs)
+{
+	ksu_handle_sys_prctl(regs->regs[0], regs->regs[1], regs->regs[2], regs->regs[3], regs->regs[4]);
+	return __arm64_sys_prctl(regs);
+}
+#endif
 
 extern long __arm64_sys_execve(const struct pt_regs *regs);
 static syscall_fn_t aarch64_execve __read_mostly = nullptr;
@@ -138,6 +150,19 @@ asmlinkage long hook_armeabi_reboot(const struct pt_regs *regs)
 	return __arm64_sys_reboot(regs);
 }
 
+#ifdef CONFIG_KSU_SUSFS
+// prctl has no COMPAT_SYSCALL_DEFINE (kernel/sys.c has one SYSCALL_DEFINE5):
+// compat_sys_call_table's prctl slot is the same __arm64_sys_prctl symbol,
+// not a separate compat one.
+extern long __arm64_sys_prctl(const struct pt_regs *regs);
+static syscall_fn_t armeabi_prctl __read_mostly = nullptr;
+asmlinkage long hook_armeabi_prctl(const struct pt_regs *regs)
+{
+	ksu_handle_sys_prctl(regs->regs[0], regs->regs[1], regs->regs[2], regs->regs[3], regs->regs[4]);
+	return __arm64_sys_prctl(regs);
+}
+#endif
+
 extern long __arm64_compat_sys_execve(const struct pt_regs *regs);
 static syscall_fn_t armeabi_execve __read_mostly = nullptr;
 asmlinkage long hook_armeabi_execve(const struct pt_regs *regs)
@@ -218,6 +243,15 @@ asmlinkage long hook_aarch64_reboot(int magic1, int magic2, unsigned int cmd, vo
 	return sys_reboot(magic1, magic2, cmd, arg);
 }
 
+#ifdef CONFIG_KSU_SUSFS
+static void *aarch64_prctl __read_mostly = nullptr;
+asmlinkage long hook_aarch64_prctl(int option, unsigned long arg2, unsigned long arg3, unsigned long arg4, unsigned long arg5)
+{
+	ksu_handle_sys_prctl(option, arg2, arg3, arg4, arg5);
+	return sys_prctl(option, arg2, arg3, arg4, arg5);
+}
+#endif
+
 static void *aarch64_execve __read_mostly = nullptr;
 asmlinkage long hook_aarch64_execve(const char __user * filename, const char __user *const __user * argv, const char __user *const __user * envp)
 {
@@ -274,6 +308,15 @@ asmlinkage long hook_armeabi_reboot(int magic1, int magic2, unsigned int cmd, vo
 	ksu_handle_sys_reboot(magic1, magic2, cmd, &arg);
 	return sys_reboot(magic1, magic2, cmd, arg);
 }
+
+#ifdef CONFIG_KSU_SUSFS
+static void *armeabi_prctl __read_mostly = nullptr;
+asmlinkage long hook_armeabi_prctl(int option, unsigned long arg2, unsigned long arg3, unsigned long arg4, unsigned long arg5)
+{
+	ksu_handle_sys_prctl(option, arg2, arg3, arg4, arg5);
+	return sys_prctl(option, arg2, arg3, arg4, arg5);
+}
+#endif
 
 static void *armeabi_execve __read_mostly = nullptr;
 asmlinkage long hook_armeabi_execve(const char __user * filename,
@@ -399,11 +442,17 @@ static void syscall_table_ksud_hook_init()
 	read_and_replace_syscall((void *)&aarch64_reboot, __AARCH64_reboot, (void *)hook_aarch64_reboot, (void *)sys_call_table);
 	read_and_replace_syscall((void *)&aarch64_newfstat, __AARCH64_newfstat, (void *)hook_aarch64_newfstat_ret, (void *)sys_call_table);
 	read_and_replace_syscall((void *)&aarch64_read, __AARCH64_read, (void *)hook_aarch64_read, (void *)sys_call_table);
+#ifdef CONFIG_KSU_SUSFS
+	read_and_replace_syscall((void *)&aarch64_prctl, __AARCH64_prctl, (void *)hook_aarch64_prctl, (void *)sys_call_table);
+#endif
 
 #if defined(CONFIG_COMPAT)
 	read_and_replace_syscall((void *)&armeabi_reboot, __ARMEABI_reboot, (void *)hook_armeabi_reboot, (void *)compat_sys_call_table);
 	read_and_replace_syscall((void *)&armeabi_fstat64, __ARMEABI_fstat64, (void *)hook_armeabi_fstat64_ret, (void *)compat_sys_call_table);
 	read_and_replace_syscall((void *)&armeabi_read, __ARMEABI_read, (void *)hook_armeabi_read, (void *)compat_sys_call_table);
+#ifdef CONFIG_KSU_SUSFS
+	read_and_replace_syscall((void *)&armeabi_prctl, __ARMEABI_prctl, (void *)hook_armeabi_prctl, (void *)compat_sys_call_table);
+#endif
 #endif // COMPAT
 
 	// start unreg kthread
