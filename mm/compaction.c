@@ -744,16 +744,27 @@ isolate_freepages_range(struct compact_control *cc,
 }
 
 /* Similar to reclaim, but different enough that they don't share logic */
-static bool too_many_isolated(struct zone *zone)
+static bool too_many_isolated(struct compact_control *cc)
 {
 	unsigned long active, inactive, isolated;
 
-	inactive = node_page_state(zone->zone_pgdat, NR_INACTIVE_FILE) +
-			node_page_state(zone->zone_pgdat, NR_INACTIVE_ANON);
-	active = node_page_state(zone->zone_pgdat, NR_ACTIVE_FILE) +
-			node_page_state(zone->zone_pgdat, NR_ACTIVE_ANON);
-	isolated = node_page_state(zone->zone_pgdat, NR_ISOLATED_FILE) +
-			node_page_state(zone->zone_pgdat, NR_ISOLATED_ANON);
+	inactive = node_page_state(cc->zone->zone_pgdat, NR_INACTIVE_FILE) +
+			node_page_state(cc->zone->zone_pgdat, NR_INACTIVE_ANON);
+	active = node_page_state(cc->zone->zone_pgdat, NR_ACTIVE_FILE) +
+			node_page_state(cc->zone->zone_pgdat, NR_ACTIVE_ANON);
+	isolated = node_page_state(cc->zone->zone_pgdat, NR_ISOLATED_FILE) +
+			node_page_state(cc->zone->zone_pgdat, NR_ISOLATED_ANON);
+
+	/*
+	 * Allow GFP_NOFS to isolate past the limit set for regular
+	 * compaction runs. This prevents an ABBA deadlock when other
+	 * compactors have already isolated to the limit, but are
+	 * blocked on filesystem locks held by the GFP_NOFS thread.
+	 */
+	if (cc->gfp_mask & __GFP_FS) {
+		inactive >>= 3;
+		active >>= 3;
+	}
 
 	return isolated > (inactive + active) / 2;
 }
@@ -796,7 +807,7 @@ isolate_migratepages_block(struct compact_control *cc, unsigned long low_pfn,
 	 * list by either parallel reclaimers or compaction. If there are,
 	 * delay for some time until fewer pages are isolated
 	 */
-	while (unlikely(too_many_isolated(zone))) {
+	while (unlikely(too_many_isolated(cc))) {
 		/* async migration should just abort */
 		if (cc->mode == MIGRATE_ASYNC)
 			return 0;
@@ -859,11 +870,10 @@ isolate_migratepages_block(struct compact_control *cc, unsigned long low_pfn,
 
 		/*
 		 * Check if the pageblock has already been marked skipped.
-		 * Only the aligned PFN is checked as the caller isolates
-		 * COMPACT_CLUSTER_MAX at a time so the second call must
-		 * not falsely conclude that the block should be skipped.
+		 * Only the first PFN is checked as the caller isolates
 		 */
-		if (!valid_page && IS_ALIGNED(low_pfn, pageblock_nr_pages)) {
+		if (!valid_page && (IS_ALIGNED(low_pfn, pageblock_nr_pages) ||
++				    low_pfn == cc->zone->zone_start_pfn)) {
 			if (!cc->ignore_skip_hint && get_pageblock_skip(page)) {
 				low_pfn = end_pfn;
 				goto isolate_abort;
@@ -1797,7 +1807,8 @@ static isolate_migrate_t isolate_migratepages(struct zone *zone,
 		 * before making it "skip" so other compaction instances do
 		 * not scan the same block.
 		 */
-		if (IS_ALIGNED(low_pfn, pageblock_nr_pages) &&
+		if ((IS_ALIGNED(low_pfn, pageblock_nr_pages) ||
+		     low_pfn == zone->zone_start_pfn) &&
 		    !fast_find_block && !isolation_suitable(cc, page))
 			continue;
 

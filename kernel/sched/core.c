@@ -1354,8 +1354,8 @@ done:
 static int uclamp_validate(struct task_struct *p,
 			   const struct sched_attr *attr, bool user)
 {
-	int util_min = p->uclamp_req[UCLAMP_MIN].value;
-	int util_max = p->uclamp_req[UCLAMP_MAX].value;
+	unsigned int util_min = p->uclamp_req[UCLAMP_MIN].value;
+	unsigned int util_max = p->uclamp_req[UCLAMP_MAX].value;
 
 	if (attr->sched_flags & SCHED_FLAG_UTIL_CLAMP_MIN) {
 		util_min = attr->sched_util_min;
@@ -8293,7 +8293,7 @@ static void uclamp_set(struct cgroup_subsys_state *css)
 	int i;
 
 	static struct uclamp_param tgts[] = {
-		{"top-app",				"0", "95", 1, 20480},
+		{"top-app",				"0", "max", 1, 20480},
 		{"rt",					"0", "max", 0, 20480},
 		{"nnapi-hal",			"0", "max", 0, 20480},
 		{"foreground",			"0", "60",  0, 12288},

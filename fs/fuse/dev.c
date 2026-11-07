@@ -152,8 +152,9 @@ static struct fuse_req *__fuse_get_req(struct fuse_conn *fc, unsigned npages,
 
 	if (fuse_block_alloc(fc, for_background)) {
 		err = -EINTR;
-		if (wait_event_killable_exclusive(fc->blocked_waitq,
-				!fuse_block_alloc(fc, for_background)))
+		if (wait_event_freezable_state_exclusive(fc->blocked_waitq,
+				!fuse_block_alloc(fc, for_background),
+				TASK_KILLABLE))
 			goto out;
 	}
 	/* Matches smp_wmb() in fuse_set_initialized() */
@@ -467,8 +468,8 @@ static void request_wait_answer(struct fuse_conn *fc, struct fuse_req *req)
 
 	if (!test_bit(FR_FORCE, &req->flags)) {
 		/* Only fatal signals may interrupt this */
-		err = wait_event_killable(req->waitq,
-					test_bit(FR_FINISHED, &req->flags));
+		err = fuse_wait_event_killable(req->waitq,
+				test_bit(FR_FINISHED, &req->flags));
 		if (!err)
 			return;
 
@@ -486,11 +487,9 @@ static void request_wait_answer(struct fuse_conn *fc, struct fuse_req *req)
 
 	/*
 	 * Either request is already in userspace, or it was forced.
-	 * Wait half of freeze_timeout_msecs to avoid getting stuck.
+	 * Wait it out.
 	 */
-	while (!test_bit(FR_FINISHED, &req->flags))
-		wait_event_freezable_timeout(req->waitq,
-			test_bit(FR_FINISHED, &req->flags), freeze_timeout_msecs / 2);
+	fuse_wait_event(req->waitq, test_bit(FR_FINISHED, &req->flags));
 }
 
 static void __fuse_request_send(struct fuse_conn *fc, struct fuse_req *req)
